@@ -11,30 +11,30 @@ class SensorBeacon
 {
 private:
     BLEAdvertising *pAdvertising;
-    char adv_packet[15];
+    char adv_packet[27-3];
 
 public:
     enum class Sensor
     {
-        Temp = 1,
-        Hum = 2,
-        Press = 4,
-        Lum = 8,
-        Co2 = 16,
+        Temp = 0x01,
+        Hum = 0x02,
+        Press = 0x04,
+        Lum = 0x08,
+        Co2 = 0x10
     };
-    
-    SensorBeacon(uint8_t stype);
-    void setup(void);
-    void set_battery_type(uint8_t type);
-    void set_remaining_battery(uint16_t mv);
-    void set_temp(int16_t v);
-    void set_hum(int8_t v);
-    void set_press(uint16_t v);
-    void set_lum(uint16_t v);
-    void set_co2(uint16_t v);
-    void set_adv(void);
+
+    SensorBeacon(uint8_t stype, uint8_t btype, uint8_t id);
+    void setup(uint32_t advint_min_ms,  uint32_t advint_max_ms);
     void start(void);
     void stop(void);
+    void setErrorCode(uint8_t v);
+    void setBatteryInfo(uint16_t v);
+    void setTemp(int16_t v);
+    void setHum(int8_t v);
+    void setPress(uint16_t v);
+    void setLum(uint16_t v);
+    void setCo2(uint16_t v);
+    void setAdv(void);
 };
 
 #endif // SENSOR_BEACON_H

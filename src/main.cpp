@@ -10,7 +10,7 @@
 
 MHZ19 myMHZ19; // Constructor for library
 HardwareSerial mySerial(1);
-SensorBeacon SBeacon((uint8_t)SensorBeacon::Sensor::Co2);
+SensorBeacon SBeacon((uint8_t)SensorBeacon::Sensor::Co2, 0, 0x01);
 
 static int32_t s_mode = 0;
 static uint32_t s_last = 0;
@@ -42,7 +42,7 @@ void setup()
     M5.Lcd.setTextColor(WHITE, BLACK);
 
     // initialize the Sensor beacon
-    SBeacon.setup();
+    SBeacon.setup(500,500);
     SBeacon.start();
 }
 
@@ -62,9 +62,9 @@ void loop()
             M5.Lcd.setCursor(0, 0);
             M5.Lcd.printf("CO2 (ppm): %5d\n", CO2);
 
-            SBeacon.set_lum(CO2); // TBD: change co2 api
+            SBeacon.setCo2(CO2);
             SBeacon.stop();
-            SBeacon.set_adv();
+            SBeacon.setAdv();
             SBeacon.start();
 
             // Auto calib (Interval average)
