@@ -1,7 +1,8 @@
 #include <M5Stack.h>
 
+#include <CircularBuffer.h>
+#include "QuickStats.h"
 #include "MHZ19.h"
-
 #include "sensor_beacon.h"
 
 #define RX_PIN 16     // Rx pin which the MHZ19 Tx pin is attached to
@@ -11,13 +12,15 @@
 MHZ19 myMHZ19; // Constructor for library
 HardwareSerial mySerial(1);
 SensorBeacon SBeacon((uint8_t)SensorBeacon::Sensor::Co2, 0, 0x01);
+QuickStats stats; //initialize an instance of this class
 
 static int32_t s_mode = 0;
 static uint32_t s_last = 0;
 static uint32_t s_calib_time = 0;
 static bool s_B_long_press = false;
-static int32_t s_co2_ave = 0;
-static int32_t s_co2_ave_cnt = 0;
+static float s_temp[16] = {0};
+static int8_t s_temp_pos = 0;
+static CircularBuffer<uint16_t, 100> s_buffer;
 
 void setup()
 {
@@ -25,11 +28,9 @@ void setup()
     M5.begin();
     M5.Speaker.begin();
     M5.Speaker.mute();
-    /*
-    Power chip connected to gpio21, gpio22, I2C device
+    /* Power chip connected to gpio21, gpio22, I2C device
     Set battery charging voltage and current
-    If used battery, please call this function in your project
-  */
+    If used battery, please call this function in your project */
     M5.Power.begin();
 
     // initialize the MHZ19
@@ -42,22 +43,21 @@ void setup()
     M5.Lcd.setTextColor(WHITE, BLACK);
 
     // initialize the Sensor beacon
-    SBeacon.setup(500,500);
+    SBeacon.setup(1000, 1000);
     SBeacon.start();
 }
 
 void loop()
 {
-
     /* note: getCO2() default is command "CO2 Unlimited". This returns the correct CO2 reading even
     if below background CO2 levels or above range (useful to validate sensor). You can use the
     usual documented command with getCO2(false) */
-    if (millis() - s_last > 2000)
+    if (millis() - s_last > 5000)
     {
         s_last = millis();
 
         uint16_t CO2 = myMHZ19.getCO2(); // Request CO2 (as ppm)
-        if ((CO2 < 10000) && (CO2 > 0))
+        if (CO2 < 10000)
         {
             M5.Lcd.setCursor(0, 0);
             M5.Lcd.printf("CO2 (ppm): %5d\n", CO2);
@@ -67,11 +67,36 @@ void loop()
             SBeacon.setAdv();
             SBeacon.start();
 
-            // Auto calib (Interval average)
-            s_co2_ave += CO2;
-            if (s_co2_ave_cnt >= 30)
+            s_temp[s_temp_pos] = myMHZ19.getTemperature(true, false);
+            M5.Lcd.printf("Temp: %.2f\n", s_temp[s_temp_pos]);
+
+            float tmp_sd = stats.stdev(s_temp, 16);
+            M5.Lcd.printf("Temp(sd): %.4f\n", tmp_sd);
+            s_temp_pos++;
+            s_temp_pos &= 0xf;
+
+            if (tmp_sd >= 0.05f)
             {
-                if ((s_co2_ave / 30) <= 380)
+                s_buffer.clear();
+            }
+
+            if (CO2 != 0)
+            {
+                s_buffer.push(CO2);
+            }
+
+            if (s_buffer.isFull())
+            {
+                int32_t size = s_buffer.size();
+                uint32_t ave = 0;
+                for (int i = 0; i < size; i++)
+                {
+                    ave += s_buffer[i];
+                }
+                ave /= size;
+                M5.Lcd.printf("ave : %4d\n", ave);
+
+                if (ave <= 380)
                 {
                     // 12H cycle
                     if ((s_calib_time == 0) || ((millis() - s_calib_time) > (60 * 60 * 12)))
@@ -82,13 +107,8 @@ void loop()
                         M5.Lcd.clear(BLACK);
                         s_calib_time = millis();
                     }
+                    s_buffer.clear();
                 }
-                s_co2_ave = 0;
-                s_co2_ave_cnt = 0;
-            }
-            else
-            {
-                s_co2_ave_cnt++;
             }
         }
     }
