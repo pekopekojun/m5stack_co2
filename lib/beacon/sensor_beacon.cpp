@@ -68,7 +68,7 @@ void SensorBeacon::setTemp(int16_t v)
     adv_packet[10] = (v >> 8) & 0xff;
 }
 
-void SensorBeacon::setHum(int8_t v)
+void SensorBeacon::setHum(uint8_t v)
 {
     adv_packet[11] = v;
 }

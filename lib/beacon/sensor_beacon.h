@@ -30,7 +30,7 @@ public:
     void setErrorCode(uint8_t v);
     void setBatteryInfo(uint16_t v);
     void setTemp(int16_t v);
-    void setHum(int8_t v);
+    void setHum(uint8_t v);
     void setPress(uint16_t v);
     void setLum(uint16_t v);
     void setCo2(uint16_t v);

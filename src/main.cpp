@@ -1,18 +1,27 @@
 #include <M5Stack.h>
-
+#include <Wire.h>
 #include <CircularBuffer.h>
 #include "QuickStats.h"
+#include <Adafruit_BME280.h>
 #include "MHZ19.h"
+
 #include "sensor_beacon.h"
 
 #define RX_PIN 16     // Rx pin which the MHZ19 Tx pin is attached to
 #define TX_PIN 17     // Tx pin which the MHZ19 Rx pin is attached to
 #define BAUDRATE 9600 // Device to MH-Z19 Serial baudrate (should not be changed)
 
+#define SEALEVELPRESSURE_HPA (1013.25)
+
 MHZ19 myMHZ19; // Constructor for library
 HardwareSerial mySerial(1);
-SensorBeacon SBeacon((uint8_t)SensorBeacon::Sensor::Co2, 0, 0x01);
-QuickStats stats; //initialize an instance of this class
+SensorBeacon SBeacon((uint8_t)SensorBeacon::Sensor::Co2 |
+                         (uint8_t)SensorBeacon::Sensor::Temp |
+                         (uint8_t)SensorBeacon::Sensor::Hum |
+                         (uint8_t)SensorBeacon::Sensor::Press,
+                     0, 0x01);
+QuickStats stats;    //initialize an instance of this class
+Adafruit_BME280 bme; // I2C
 
 static int32_t s_mode = 0;
 static uint32_t s_last = 0;
@@ -24,6 +33,8 @@ static CircularBuffer<uint16_t, 100> s_buffer;
 
 void setup()
 {
+    Serial.begin(115200);
+
     // initialize the M5Stack object
     M5.begin();
     M5.Speaker.begin();
@@ -37,6 +48,9 @@ void setup()
     mySerial.begin(BAUDRATE, SERIAL_8N1, RX_PIN, TX_PIN);
     myMHZ19.begin(mySerial);
     myMHZ19.autoCalibration(false); // Turn auto calibration ON (OFF autoCalibration(false))
+
+    // initialize the BME280
+    bme.begin(0x76, &Wire);
 
     // Lcd Setting
     M5.Lcd.setTextSize(3);
@@ -54,26 +68,37 @@ void loop()
     usual documented command with getCO2(false) */
     if (millis() - s_last > 5000)
     {
+        //printValues();
         s_last = millis();
 
         uint16_t CO2 = myMHZ19.getCO2(); // Request CO2 (as ppm)
+        float temp = bme.readTemperature();
+        float press = bme.readPressure() / 100.0F;
+        float hum = bme.readHumidity();
         if (CO2 < 10000)
         {
             M5.Lcd.setCursor(0, 0);
             M5.Lcd.printf("CO2 (ppm): %5d\n", CO2);
 
+            SBeacon.setPress((uint16_t)press);
+            SBeacon.setTemp((int16_t)(temp * 100));
+            SBeacon.setHum((uint8_t)hum);
             SBeacon.setCo2(CO2);
             SBeacon.stop();
             SBeacon.setAdv();
             SBeacon.start();
 
             s_temp[s_temp_pos] = myMHZ19.getTemperature(true, false);
-            M5.Lcd.printf("Temp: %.2f\n", s_temp[s_temp_pos]);
+            M5.Lcd.printf("Temp(co2): %.2f\n", s_temp[s_temp_pos]);
 
             float tmp_sd = stats.stdev(s_temp, 16);
             M5.Lcd.printf("Temp(sd): %.4f\n", tmp_sd);
             s_temp_pos++;
             s_temp_pos &= 0xf;
+
+            M5.Lcd.printf("Temp : %.3f\n", temp);
+            M5.Lcd.printf("Hum  : %.3f\n", hum);
+            M5.Lcd.printf("Press: %.3f\n", press);
 
             if (tmp_sd >= 0.05f)
             {
@@ -94,7 +119,7 @@ void loop()
                     ave += s_buffer[i];
                 }
                 ave /= size;
-                M5.Lcd.printf("ave : %4d\n", ave);
+                M5.Lcd.printf("Ave(co2): %4d\n", ave);
 
                 if (ave <= 380)
                 {
