@@ -100,7 +100,7 @@ void loop()
             M5.Lcd.printf("Hum  : %.3f\n", hum);
             M5.Lcd.printf("Press: %.3f\n", press);
 
-            if (tmp_sd >= 0.05f)
+            if (tmp_sd >= 0.07f)
             {
                 s_buffer.clear();
             }
@@ -134,6 +134,10 @@ void loop()
                     }
                     s_buffer.clear();
                 }
+            }
+            else
+            {
+                M5.Lcd.printf("Ave(co2): *%3d\n",s_buffer.size());
             }
         }
     }
